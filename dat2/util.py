@@ -27,6 +27,10 @@ LABELS = np.array([
 ])
 
 
+def messages_to_df(messages):
+    return pd.DataFrame(data=messages, columns=['MessageText'])
+
+
 def chat_msg_list(chat: pd.DataFrame):
     return [chat.loc[i:i, :] for i in range(chat.shape[0])]
 
@@ -82,8 +86,8 @@ def _read_chats_from_zip(chats_zip, n_files=None):
                     logging.error("Could not read {}. {}".format(name, e))
 
 
-def read_chats_from_zip(chats_zip):
-    return list(_read_chats_from_zip(chats_zip))
+def read_chats_from_zip(chats_zip, n_files=None):
+    return list(_read_chats_from_zip(chats_zip, n_files=n_files))
 
 
 def read_preprocessed_chats(preprocessed_path):
