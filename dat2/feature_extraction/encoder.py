@@ -14,14 +14,14 @@ from dat2.util import LABELS
 
 class Encoder:
     def __init__(self):
-        self.scaler = StandardScaler()
-        # self.scaler = MinMaxScaler()
+        # self.scaler = StandardScaler()
+        self.scaler = MinMaxScaler()
 
         structural = FunctionFeaturizer(
             number_of_words,
-            # sender_info,
-            # previous_msg_labels,
-            # previous_same_author_msg_labels,
+            sender_info,
+            previous_msg_labels,
+            previous_same_author_msg_labels,
         )
         wordvec = FunctionFeaturizer(avg_wordvec)
         word_vectorizer = ChatTfidf(
@@ -99,7 +99,7 @@ class Encoder:
         if sparse.issparse(feature_vectors):
             feature_vectors = feature_vectors.todense()
         feature_vectors = self.scaler.transform(feature_vectors)
-        print('Feature vectors\' shape: ', feature_vectors.shape)
+        # print('Feature vectors\' shape: ', feature_vectors.shape)
         return feature_vectors
 
     @staticmethod

@@ -72,6 +72,17 @@ def preprocess(chats):
     return results
 
 
+def _preprocess_unlabeled(chats):
+    for chat in tqdm(chats, desc='Preprocessing chats'):
+        chat = pd.DataFrame({'MessageText': chat.Text, 'ChatId': chat.ChatID, 'MessageId': chat.ChatMessageID}, dtype=str)
+        masked_chat = mask_chat(chat)
+        yield masked_chat
+
+
+def preprocess_unlabeled(chats):
+    return list(_preprocess_unlabeled(chats))
+
+
 def preprocess_messages_df(messages_df):
     messages_df = messages_df.drop(['Other', 'HITId'], axis=1, errors='ignore')
     messages_df = filter_non_labeled(messages_df)
