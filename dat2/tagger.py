@@ -3,10 +3,11 @@ import logging
 import pandas as pd
 import boto3
 import botocore
+from sklearn.base import BaseEstimator
 from sklearn.externals import joblib
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
-
+from sklearn.model_selection import cross_val_predict
 from dat2.feature_extraction.encoder import Encoder
 
 
@@ -67,39 +68,93 @@ class Tagger:
 
 
 class EnsembleClassifier:
-    def __init__(self, classifiers, voting: str, stacking_clf=LinearSVC()):
+    def __init__(self, classifiers, voting: str, voting_clf=LinearSVC()):
+        assert voting in ['hard', 'soft', 'hard-stacking', 'soft-stacking']
         self.classifiers = classifiers
         self.voting = voting
-        self.stacking_clf = stacking_clf
-        self.voting_clf = OneVsRestClassifier(stacking_clf)
+        self.voting_clf = OneVsRestClassifier(voting_clf, n_jobs=-1)
 
     def fit(self, X, y):
-        for clf in self.classifiers:
-            clf.fit(X, y)
-        if self.voting == 'stacking':
-            preds = [clf.predict(X) for clf in self.classifiers]
+        for clf_name in self.classifiers:
+            self.classifiers[clf_name].fit(X[clf_name], y)
+        if self.voting == 'hard-stacking':
+            preds = [self.classifiers[clf_name].predict(X[clf_name]) for clf_name in self.classifiers]
             preds = np.concatenate(preds, axis=1)
             self.voting_clf.fit(preds, y)
+        if self.voting == 'soft-stacking':
+            proba_preds = [self.classifiers[clf_name].predict_proba(X[clf_name]) for clf_name in self.classifiers]
+            proba_preds = np.concatenate(proba_preds, axis=1)
+            self.voting_clf.fit(proba_preds, y)
+
+    def cross_val_predict(self, X, y):
+        if self.voting == 'hard':
+            individual_preds = [cross_val_predict(estimator=self.classifiers[clf_name],
+                                                  X=X[clf_name],
+                                                  y=y,
+                                                  cv=5)
+                                for clf_name in self.classifiers]
+            preds = self.vote_average(individual_preds)
+        if self.voting == 'soft':
+            for c in self.classifiers:
+                self.classifiers[c] = ProbabilityPredictionWrapper(self.classifiers[c])
+            individual_proba_preds = [cross_val_predict(estimator=self.classifiers[clf_name],
+                                                        X=X[clf_name],
+                                                        y=y,
+                                                        cv=5)
+                                      for clf_name in self.classifiers]
+            preds = self.vote_average(individual_proba_preds)
+        if self.voting == 'hard-stacking':
+            individual_preds = [cross_val_predict(estimator=self.classifiers[clf_name],
+                                                  X=X[clf_name],
+                                                  y=y,
+                                                  cv=5)
+                                for clf_name in self.classifiers]
+            preds = cross_val_predict(estimator=self.voting_clf, X=np.concatenate(individual_preds, axis=1), y=y, cv=5)
+        if self.voting == 'soft-stacking':
+            for c in self.classifiers:
+                self.classifiers[c] = ProbabilityPredictionWrapper(self.classifiers[c])
+            individual_proba_preds = [cross_val_predict(estimator=self.classifiers[clf_name],
+                                                        X=X[clf_name],
+                                                        y=y,
+                                                        cv=5)
+                                      for clf_name in self.classifiers]
+            preds = cross_val_predict(estimator=self.voting_clf, X=np.concatenate(individual_proba_preds, axis=1), y=y,
+                                      cv=5)
+        return preds
 
     def predict(self, X):
-        individual_preds = [clf.predict(X) for clf in self.classifiers]
         if self.voting == 'hard':
-            preds = self.hard_vote(individual_preds)
-        if self.voting == 'stacking':
+            individual_preds = [self.classifiers[clf_name].predict(X[clf_name]) for clf_name in self.classifiers]
+            preds = self.vote_average(individual_preds)
+        if self.voting == 'soft':
+            individual_proba_preds = [self.classifiers[clf_name].predict_proba(X[clf_name]) for clf_name in
+                                      self.classifiers]
+            preds = self.vote_average(individual_proba_preds)
+        if self.voting == 'hard-stacking':
+            individual_preds = [self.classifiers[clf_name].predict(X[clf_name]) for clf_name in self.classifiers]
             preds = self.voting_clf.predict(np.concatenate(individual_preds, axis=1))
-
+        if self.voting == 'soft-stacking':
+            individual_proba_preds = [self.classifiers[clf_name].predict_proba(X[clf_name]) for clf_name in
+                                      self.classifiers]
+            preds = self.voting_clf.predict(np.concatenate(individual_proba_preds, axis=1))
         return preds
 
     @staticmethod
-    def hard_vote(individual_preds):
-        pred_sum = np.zeros(shape=individual_preds[0].shape)
-        for preds in individual_preds:
-            np.add(preds, pred_sum, out=pred_sum)
-
-        nb_clf = len(individual_preds)
+    def vote_average(individual_preds):
+        pred_avg = np.average(individual_preds, axis=0)
         threshold = 0.5
-        voted_preds = [[0 if val / nb_clf < threshold else 1 for val in row]
-                       for row in pred_sum]
+        voted_preds = [[0 if val < threshold else 1 for val in row]
+                       for row in pred_avg]
         return np.array(voted_preds)
 
 
+class ProbabilityPredictionWrapper(BaseEstimator):
+    def __init__(self, estimator=None):
+        self.estimator = estimator
+
+    def fit(self, X, y):
+        self.estimator.fit(X, y)
+        return self
+
+    def predict(self, X, y=None):
+        return self.estimator.predict_proba(X)
