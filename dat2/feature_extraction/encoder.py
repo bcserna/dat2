@@ -13,75 +13,73 @@ from dat2.util import LABELS
 
 
 class Encoder:
-    def __init__(self):
+    available_features = ['structural', 'wordvec', 'word_tfidf', 'wh_questions', 'greets', 'emotes', 'question_mark',
+                          'first_n_tfidf', 'md_window', 'infersent', 'char_tfidf']
+
+    def __init__(self, use_features):
         # self.scaler = StandardScaler()
         self.scaler = MinMaxScaler()
 
-        structural = FunctionFeaturizer(
-            number_of_words,
-            sender_info,
-            previous_msg_labels,
-            previous_same_author_msg_labels,
-        )
-        wordvec = FunctionFeaturizer(avg_wordvec)
-        word_vectorizer = ChatTfidf(
-            use_idf=True,
-            ngram_range=(1, 2)
-        )
-        wh_questions = WordExistence({
-            'who', 'where', 'why', 'when', 'how', 'what', 'which', 'whose', 'whom'
-        })
-        greets = WordExistence({
-            'bye', 'goodbye', 'hello', 'hi'
-        })
-        emotes = WordExistence({
-            ':)', ':-)', ':(', ':-(',
-            ':d', ':-d', 'xd',
-            ';d', ';-d', ';)', ';-)', ';(', ';-(',
-            ':o', ':s', ':\\', ':/', ':|',
-            'lol', 'lmao', 'rofl'
-        })
-        question_mark = WordExistence({
-            '?'
-        })
-        first_n_words = FirstNWordsTfidf(
-            n=4,
-            use_idf=True,
-            ngram_range=(1, 2)
-        )
-        md_vectorizer = MdWindowTfIdf(
-            use_idf=False,
-            ngram_range=(1, 4),
-            words_before=2,
-            words_after=2,
-        )
+        featurizers = []
 
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            infersent = InfersentEncoder()
+        if 'structural' in set(use_features):
+            structural = FunctionFeaturizer(
+                number_of_words,
+                sender_info,
+                previous_msg_labels,
+                previous_same_author_msg_labels,
+            )
+            featurizers.append(('structural', structural))
 
-        char_tfidf = ChatTfidf(
-            use_idf=False,
-            ngram_range=(3, 6),
-            analyzer='char',
-            min_df=5
-        )
+        if 'wordvec' in use_features:
+            wordvec = FunctionFeaturizer(avg_wordvec)
+            featurizers.append(('wordvec', wordvec))
 
-        self.feature_unifier = FeatureUnion([
-            # ('char_tfidf', char_tfidf)
-            # ('word_tfidf', word_vectorizer),
-            # ('first_n_words', first_n_words),
-            ('infersent', infersent),
-            # ('wordvec', wordvec),
-            # ('md_tfidf', md_vectorizer),
-            # ('structural', structural),
-            # ('wh_questions', wh_questions),
-            # ('greets', greets),
-            # ('emotes', emotes),
-            # ('question_mark', question_mark),
-        ],
-            n_jobs=1
-        )
+        if 'word_tfidf' in use_features:
+            word_tfidf = ChatTfidf(use_idf=True, ngram_range=(1, 2))
+            featurizers.append(('word_tfidf', word_tfidf))
+
+        if 'wh_questions' in use_features:
+            wh_questions = WordExistence({'who', 'where', 'why', 'when', 'how', 'what', 'which', 'whose', 'whom'})
+            featurizers.append(('wh_questions', wh_questions))
+
+        if 'greets' in use_features:
+            greets = WordExistence({'bye', 'goodbye', 'hello', 'hi'})
+            featurizers.append(('greets', greets))
+
+        if 'emotes' in use_features:
+            emotes = WordExistence({
+                ':)', ':-)', ':(', ':-(',
+                ':d', ':-d', 'xd',
+                ';d', ';-d', ';)', ';-)', ';(', ';-(',
+                ':o', ':s', ':\\', ':/', ':|',
+                'lol', 'lmao', 'rofl'
+            })
+            featurizers.append(('emotes', emotes))
+
+        if 'question_mark' in use_features:
+            question_mark = WordExistence({'?'})
+            featurizers.app(('question_mark', question_mark))
+
+        if 'first_n_tfidf' in use_features:
+            first_n_tfidf = FirstNWordsTfidf(n=4, use_idf=True, ngram_range=(1, 2))
+            featurizers.append(('first_n_tfidf', first_n_tfidf))
+
+        if 'md_window' in use_features:
+            md_window = MdWindowTfIdf(use_idf=False, ngram_range=(1, 4), words_before=2, words_after=2)
+            featurizers.append(('md_window', md_window))
+
+        if 'infersent' in use_features:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                infersent = InfersentEncoder()
+                featurizers.append(('infersent', infersent))
+
+        if 'char_tfidf' in use_features:
+            char_tfidf = ChatTfidf(use_idf=False, ngram_range=(3, 6), analyzer='char', min_df=5)
+            featurizers.append(('char_tfidf', char_tfidf))
+
+        self.feature_unifier = FeatureUnion(featurizers, n_jobs=1)
 
         self.normalizer = MaxAbsScaler()
         self.kbest = SelectKBest(chi2, k=3000)
