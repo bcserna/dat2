@@ -8,11 +8,11 @@ def readme():
 
 setup(
     name='dialog_act_tagger',
-    version='17.10.04',
+    version='17.12.04',
     description='Dialog act tagger for chat messages',
-    url='https://bitbucket.3amlabs.net/projects/INTEAM/repos/dialogact_tagger/',
-    author='Balazs Cserna',
-    author_email='balazs.cserna@logmein.com',
+    url='https://github.com/bcserna/dat2',
+    author='Balázs Cserna',
+    author_email='cserna.balazs@gmail.com',
     packages=find_packages(exclude=('data', 'dialog_act_tagger.egg-info', 'models')),
     zip_safe=False,
     install_requires=[
