@@ -52,22 +52,19 @@ def filter_chats(chats, labeled):
 
 class Extender:
     def __init__(self, unlabeled_messages, labeled_messages, unlabeled_vectors, labeled_vectors, labeled_gold_standard,
-                 classifier: OneVsRestClassifier):
+                 classifier):
         # ids = unlabeled_messages.MessageId
-        # self.unlabeled = [(id_, text, vec) for id_, text, vec
-        #                   in zip(ids, messages, unlabeled_vecs)]
         self.unlabeled_messages = np.array(unlabeled_messages.MessageText)
         self.unlabeled_vectors = unlabeled_vectors
         self.labeled_messages = labeled_messages
         self.labeled_vectors = labeled_vectors
         self.labeled_gold = labeled_gold_standard
         self.classifier = classifier
-        self.extension_messages = {l: [] for l in LABELS}
-        self.extension_vectors = {l: [] for l in LABELS}
-        self.extension_labels = {l: [] for l in LABELS}
-        self.scores = []
+        self.extension_messages = None
+        self.extension_vectors = None
+        self.extension_labels = None
 
-    def self_learning(self, batch_size=1000, nb_iter=5, threshold=0.9):
+    def self_learning(self, threshold, batch_size=500, nb_iter=20):
         self.extension_messages = {l: [] for l in LABELS}
         self.extension_vectors = {l: [] for l in LABELS}
         self.extension_labels = {l: [] for l in LABELS}
@@ -80,7 +77,7 @@ class Extender:
             pred_proba = self.classifier.predict_proba(batch_vectors)
 
             # Extension
-            for pred, message, vector, i in zip(pred_proba, batch_messages, batch_vectors, batch_indices):
+            for pred, message, vector in zip(pred_proba, batch_messages, batch_vectors):
                 for l, p in zip(LABELS, pred):
                     if p > threshold:
                         self.extension_messages[l].append(message)
@@ -91,21 +88,76 @@ class Extender:
                     #     self.extension_labels[l].append(0)
 
             self.retrain_individual_classifiers(self.classifier, self.labeled_vectors, self.labeled_gold)
+            indices = indices[batch_size:]
+            np.append(arr=indices, values=batch_indices)
+
+    def ensemble_learning(self, threshold, batch_size=500, nb_iter=20):
+        self.extension_messages = {l: [] for l in LABELS}
+        self.extension_vectors = {l: {clf: [] for clf in self.classifier.classifiers} for l in LABELS}
+        self.extension_labels = {l: [] for l in LABELS}
+        indices = np.arange(len(self.unlabeled_messages))
+        np.random.shuffle(indices)
+
+        for _ in tqdm(range(nb_iter), desc='Batch'):
+            batch_indices = indices[:batch_size]
+            batch_messages = self.unlabeled_messages[batch_indices]
+            batch_vectors = {clf: self.unlabeled_vectors[clf][batch_indices] for clf in self.classifier.classifiers}
+            pred_proba = self.classifier.predict_proba(batch_vectors)
+
+            for pred, message, i in zip(pred_proba, batch_messages, range(batch_size)):
+                for l, p in zip(LABELS, pred):
+                    if p > threshold:
+                        self.extension_messages[l].append(message)
+                        self.extension_labels[l].append(1)
+                        for clf in self.classifier.classifiers:
+                            self.extension_vectors[l][clf].append(batch_vectors[clf][i])
+
+            # Retraining
+            for clf in self.classifier.classifiers:
+                classifier = self.classifier.classifiers[clf]
+                for l, estimator, i in zip(LABELS, classifier.estimators_, range(len(LABELS))):
+                    if len(self.extension_labels[l]) > 0:
+                        extended_data = np.concatenate((self.labeled_vectors[clf], self.extension_vectors[l][clf]))
+                        extended_labels = np.concatenate((self.labeled_gold[:, i], self.extension_labels[l]))
+                    else:
+                        extended_data = self.labeled_vectors[clf]
+                        extended_labels = self.labeled_gold[:, i]
+                    estimator.fit(X=extended_data, y=extended_labels)
+
+            self.retrain_ensemble(self.classifier.classifiers, self.labeled_vectors, self.labeled_gold)
 
             indices = indices[batch_size:]
             np.append(arr=indices, values=batch_indices)
 
+    def cross_val_predict_ensemble(self, cv=5):
+        kf = KFold(n_splits=cv)
+        clf = self.classifier
+        clf.fit(X=self.labeled_vectors, y=self.labeled_gold)
+        predictions = None
+        for train_index, test_index in kf.split(self.labeled_vectors):
+            labeled_train_x = {c: self.labeled_vectors[c][train_index] for c in clf}
+            labeled_train_y = {c: self.labeled_gold[c][train_index] for c in clf}
+            labeled_test_x = {c: self.labeled_vectors[c][test_index] for c in clf}
+
+            self.retrain_ensemble(clf, labeled_train_x, labeled_train_y)
+            fold_pred = clf.predict(X=labeled_test_x)
+            if predictions is None:
+                predictions = fold_pred
+            else:
+                predictions = np.concatenate((predictions, fold_pred))
+
+        return predictions
+
     def cross_val_predict(self, cv=5):
         kf = KFold(n_splits=cv)
-        clf = clone(self.classifier)
-        clf.fit(X=self.labeled_vectors, y=self.labeled_gold)
         predictions = None
         for train_index, test_index in kf.split(self.labeled_vectors):
             labeled_train_x = self.labeled_vectors[train_index]
             labeled_train_y = self.labeled_gold[train_index]
             labeled_test_x = self.labeled_vectors[test_index]
-            self.retrain_individual_classifiers(clf, labeled_train_x, labeled_train_y)
-            fold_pred = clf.predict(X=labeled_test_x)
+
+            self.retrain_individual_classifiers(self.classifier, labeled_train_x, labeled_train_y)
+            fold_pred = self.classifier.predict(X=labeled_test_x)
             if predictions is None:
                 predictions = fold_pred
             else:
@@ -122,3 +174,16 @@ class Extender:
                 extended_data = labeled_x
                 extended_labels = labeled_y[:, i]
             estimator.fit(X=extended_data, y=extended_labels)
+
+    def retrain_ensemble(self, ensemble, labeled_x, labeled_y):
+            for clf in ensemble:
+                classifier = ensemble[clf]
+                for l, estimator, i in zip(LABELS, classifier.estimators_, range(len(LABELS))):
+                    if len(self.extension_labels[l]) > 0:
+                        extended_data = np.concatenate((labeled_x[clf], self.extension_vectors[l][clf]))
+                        extended_labels = np.concatenate((labeled_y[:, i], self.extension_labels[l]))
+                    else:
+                        extended_data = labeled_x[clf]
+                        extended_labels = labeled_y[:, i]
+                    estimator.fit(X=extended_data, y=extended_labels)
+
