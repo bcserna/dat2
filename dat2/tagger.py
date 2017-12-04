@@ -139,6 +139,23 @@ class EnsembleClassifier:
             preds = self.voting_clf.predict(np.concatenate(individual_proba_preds, axis=1))
         return preds
 
+    def predict_proba(self, X):
+        if self.voting == 'hard':
+            individual_preds = [self.classifiers[clf_name].predict(X[clf_name]) for clf_name in self.classifiers]
+            pred_proba = np.average(individual_preds, axis=0)
+        if self.voting == 'soft':
+            individual_proba_preds = [self.classifiers[clf_name].predict_proba(X[clf_name]) for clf_name in
+                                      self.classifiers]
+            pred_proba = np.average(individual_proba_preds, axis=0)
+        if self.voting == 'hard-stacking':
+            individual_preds = [self.classifiers[clf_name].predict(X[clf_name]) for clf_name in self.classifiers]
+            pred_proba = self.voting_clf.predict_proba(np.concatenate(individual_preds, axis=1))
+        if self.voting == 'soft-stacking':
+            individual_proba_preds = [self.classifiers[clf_name].predict_proba(X[clf_name]) for clf_name in
+                                      self.classifiers]
+            pred_proba = self.voting_clf.predict_proba(np.concatenate(individual_proba_preds, axis=1))
+        return pred_proba
+
     @staticmethod
     def vote_average(individual_preds):
         pred_avg = np.average(individual_preds, axis=0)
