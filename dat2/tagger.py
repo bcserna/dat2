@@ -19,7 +19,7 @@ class Tagger:
     def __init__(self, classifier, encoder=None):
         self.classifier = classifier
         if encoder is None:
-            self.encoder = Encoder()
+            self.encoder = Encoder(use_features=['first_n_tfidf'])
         else:
             self.encoder = encoder
 
