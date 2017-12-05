@@ -33,7 +33,7 @@ class Tagger:
     def predict(self, X):
         return self.classifier.predict(X)
 
-    def predict_by_messages(self, messages):
+    def tag(self, messages):
         X = self.encoder.transform(Tagger.messages_to_df(messages))
         return self.classifier.predict(X)
 
@@ -56,15 +56,6 @@ class Tagger:
                 logging.error('The object does not exist in s3.')
             else:
                 raise
-
-    @staticmethod
-    def load_model(path=MODEL_DIR + 'tagger.pkl'):
-        print('Loading model...')
-        return joblib.load(filename=path)
-
-    @staticmethod
-    def load_data(path):
-        return joblib.load(filename=path)
 
 
 class EnsembleClassifier:
