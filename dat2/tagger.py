@@ -6,8 +6,8 @@ import botocore
 from sklearn.base import BaseEstimator
 from sklearn.externals import joblib
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.svm import LinearSVC
 from sklearn.model_selection import cross_val_predict
+from sklearn.linear_model import LogisticRegression
 from dat2.feature_extraction.encoder import Encoder
 
 
@@ -26,7 +26,7 @@ class Tagger:
     def fit(self, X, y):
         self.classifier.fit(X, y)
 
-    def fit_by_messages(self, messages, labels):
+    def fit_to_messages(self, messages, labels):
         X = self.encoder.transform(Tagger.messages_to_df(messages))
         self.classifier.fit(X, labels)
 
@@ -59,7 +59,7 @@ class Tagger:
 
 
 class EnsembleClassifier:
-    def __init__(self, classifiers, voting: str, voting_clf=LinearSVC()):
+    def __init__(self, classifiers, voting: str, voting_clf=LogisticRegression()):
         assert voting in ['hard', 'soft', 'hard-stacking', 'soft-stacking']
         self.classifiers = classifiers
         self.voting = voting
