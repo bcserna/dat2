@@ -8,6 +8,8 @@ from tqdm import tqdm
 from dat2.preprocessing import preprocessor
 from dat2.util import chats_msg_list, messages_to_df, LABELS
 
+np.random.seed(777)
+
 
 def is_english(text):
     try:
@@ -83,9 +85,9 @@ class Extender:
                         self.extension_messages[l].append(message)
                         self.extension_vectors[l].append(vector)
                         self.extension_labels[l].append(1)
-                    # elif p < 1 - threshold:
-                    #     self.extension_vectors[l].append(vector)
-                    #     self.extension_labels[l].append(0)
+                        # elif p < 1 - threshold:
+                        #     self.extension_vectors[l].append(vector)
+                        #     self.extension_labels[l].append(0)
 
             self.retrain_individual_classifiers(self.classifier, self.labeled_vectors, self.labeled_gold)
             indices = indices[batch_size:]
@@ -134,12 +136,12 @@ class Extender:
         clf = self.classifier
         clf.fit(X=self.labeled_vectors, y=self.labeled_gold)
         predictions = None
-        for train_index, test_index in kf.split(self.labeled_vectors):
-            labeled_train_x = {c: self.labeled_vectors[c][train_index] for c in clf}
-            labeled_train_y = {c: self.labeled_gold[c][train_index] for c in clf}
-            labeled_test_x = {c: self.labeled_vectors[c][test_index] for c in clf}
+        for train_index, test_index in kf.split(list(self.labeled_vectors.values())[0]):
+            labeled_train_x = {c: self.labeled_vectors[c][train_index] for c in clf.classifiers}
+            labeled_train_y = self.labeled_gold[train_index]
+            labeled_test_x = {c: self.labeled_vectors[c][test_index] for c in clf.classifiers}
 
-            self.retrain_ensemble(clf, labeled_train_x, labeled_train_y)
+            self.retrain_ensemble(clf.classifiers, labeled_train_x, labeled_train_y)
             fold_pred = clf.predict(X=labeled_test_x)
             if predictions is None:
                 predictions = fold_pred
@@ -176,14 +178,13 @@ class Extender:
             estimator.fit(X=extended_data, y=extended_labels)
 
     def retrain_ensemble(self, ensemble, labeled_x, labeled_y):
-            for clf in ensemble:
-                classifier = ensemble[clf]
-                for l, estimator, i in zip(LABELS, classifier.estimators_, range(len(LABELS))):
-                    if len(self.extension_labels[l]) > 0:
-                        extended_data = np.concatenate((labeled_x[clf], self.extension_vectors[l][clf]))
-                        extended_labels = np.concatenate((labeled_y[:, i], self.extension_labels[l]))
-                    else:
-                        extended_data = labeled_x[clf]
-                        extended_labels = labeled_y[:, i]
-                    estimator.fit(X=extended_data, y=extended_labels)
-
+        for clf in ensemble:
+            classifier = ensemble[clf]
+            for l, estimator, i in zip(LABELS, classifier.estimators_, range(len(LABELS))):
+                if len(self.extension_labels[l]) > 0:
+                    extended_data = np.concatenate((labeled_x[clf], self.extension_vectors[l][clf]))
+                    extended_labels = np.concatenate((labeled_y[:, i], self.extension_labels[l]))
+                else:
+                    extended_data = labeled_x[clf]
+                    extended_labels = labeled_y[:, i]
+                estimator.fit(X=extended_data, y=extended_labels)
