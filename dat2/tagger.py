@@ -12,8 +12,6 @@ from dat2.feature_extraction.encoder import Encoder
 
 
 class Tagger:
-    S3_BUCKET = 'cesml'
-    S3_MODEL_PATH = 'models/dialog_act_tagging/'
     MODEL_DIR = './models/'
 
     def __init__(self, classifier, encoder=None):
@@ -45,7 +43,7 @@ class Tagger:
         return pd.DataFrame(data=messages, columns=['MessageText'])
 
     @staticmethod
-    def download_model_from_s3(s3_bucket=S3_BUCKET, s3_model_path=S3_MODEL_PATH,
+    def download_model_from_s3(s3_bucket, s3_model_path,
                                download_destination=MODEL_DIR + 'tagger.pkl'):
         s3 = boto3.resource('s3')
         try:
