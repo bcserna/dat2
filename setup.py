@@ -7,8 +7,8 @@ def readme():
 
 
 setup(
-    name='dialog_act_tagger',
-    version='17.12.04',
+    name='dat2',
+    version='17.12.08',
     description='Dialog act tagger for chat messages',
     url='https://github.com/bcserna/dat2',
     author='Balázs Cserna',
