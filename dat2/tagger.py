@@ -9,6 +9,7 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.model_selection import cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from dat2.feature_extraction.encoder import Encoder
+from dat2.util import label_vectors_to_string
 
 
 class Tagger:
@@ -33,7 +34,8 @@ class Tagger:
 
     def tag(self, messages):
         X = self.encoder.transform(Tagger.messages_to_df(messages))
-        return self.classifier.predict(X)
+        pred = self.classifier.predict(X)
+        return label_vectors_to_string(pred)
 
     def save(self, path=MODEL_DIR + 'tagger.pkl'):
         joblib.dump(self, path)
