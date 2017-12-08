@@ -48,3 +48,7 @@ A multi-label dialog act tagger for chat messages.
   What is the difference between the free and pro versions?
       Predicted:      ['Question-Open']
       Gold standard:  ['Question-Open', 'Request-Info']
+
+* Important note:
+
+To use the Infersent embeddings in the encoder, you will need to download a pre-trained model and word vectors (visit https://github.com/facebookresearch/InferSent for more).
