@@ -131,42 +131,6 @@ class Extender:
             indices = indices[batch_size:]
             np.append(arr=indices, values=batch_indices)
 
-    def cross_val_predict_ensemble(self, cv=5):
-        kf = KFold(n_splits=cv)
-        clf = self.classifier
-        clf.fit(X=self.labeled_vectors, y=self.labeled_gold)
-        predictions = None
-        for train_index, test_index in kf.split(list(self.labeled_vectors.values())[0]):
-            labeled_train_x = {c: self.labeled_vectors[c][train_index] for c in clf.classifiers}
-            labeled_train_y = self.labeled_gold[train_index]
-            labeled_test_x = {c: self.labeled_vectors[c][test_index] for c in clf.classifiers}
-
-            self.retrain_ensemble(clf.classifiers, labeled_train_x, labeled_train_y)
-            fold_pred = clf.predict(X=labeled_test_x)
-            if predictions is None:
-                predictions = fold_pred
-            else:
-                predictions = np.concatenate((predictions, fold_pred))
-
-        return predictions
-
-    def cross_val_predict(self, cv=5):
-        kf = KFold(n_splits=cv)
-        predictions = None
-        for train_index, test_index in kf.split(self.labeled_vectors):
-            labeled_train_x = self.labeled_vectors[train_index]
-            labeled_train_y = self.labeled_gold[train_index]
-            labeled_test_x = self.labeled_vectors[test_index]
-
-            self.retrain_individual_classifiers(self.classifier, labeled_train_x, labeled_train_y)
-            fold_pred = self.classifier.predict(X=labeled_test_x)
-            if predictions is None:
-                predictions = fold_pred
-            else:
-                predictions = np.concatenate((predictions, fold_pred))
-
-        return predictions
-
     def retrain_individual_classifiers(self, classifier, labeled_x, labeled_y):
         for l, estimator, i in zip(LABELS, classifier.estimators_, range(len(LABELS))):
             if len(self.extension_labels[l]) > 0:
