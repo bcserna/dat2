@@ -25,8 +25,11 @@ class Tagger:
     def fit(self, X, y):
         self.classifier.fit(X, y)
 
-    def fit_to_messages(self, messages, labels):
-        X = self.encoder.transform(Tagger.messages_to_df(messages))
+    def fit_to_messages(self, messages, labels, fit_encoder=True):
+        messages_df = self.messages_to_df(messages)
+        if fit_encoder:
+            self.encoder.fit(messages_df)
+        X = self.encoder.transform(messages_df)
         self.classifier.fit(X, labels)
 
     def predict(self, X):
